@@ -2,10 +2,10 @@ package com.ml.community.controller;
 
 import com.ml.community.dto.AccessTokenDTO;
 import com.ml.community.dto.GithubUser;
-import com.ml.community.mapper.UserMapper;
 import com.ml.community.model.User;
 import com.ml.community.provider.GithubProvider;
 import com.ml.community.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
@@ -18,16 +18,15 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.UUID;
 
 /**
- * 登录
+ * Created by codedrinker on 2019/4/24.
  */
-
 @Controller
+@Slf4j
 public class AuthorizeController {
 
     @Autowired
     private GithubProvider githubProvider;
 
-    //注入配置中定义的
     @Value("${github.client.id}")
     private String clientId;
 
@@ -38,10 +37,8 @@ public class AuthorizeController {
     private String redirectUri;
 
     @Autowired
-    private UserMapper userMapper;
-
-    @Autowired
     private UserService userService;
+
     @GetMapping("/callback")
     public String callback(@RequestParam(name = "code") String code,
                            @RequestParam(name = "state") String state,
@@ -54,30 +51,30 @@ public class AuthorizeController {
         accessTokenDTO.setState(state);
         String accessToken = githubProvider.getAccessToken(accessTokenDTO);
         GithubUser githubUser = githubProvider.getUser(accessToken);
-        if (githubUser !=null && githubUser.getId()!=null){
+        if (githubUser != null && githubUser.getId() != null) {
             User user = new User();
             String token = UUID.randomUUID().toString();
             user.setToken(token);
             user.setName(githubUser.getName());
             user.setAccountId(String.valueOf(githubUser.getId()));
             user.setAvatarUrl(githubUser.getAvatarUrl());
-            //存入数据库
             userService.createOrUpdate(user);
-            //把token放入cookie中
-            response.addCookie(new Cookie("token",token));
-//            //登录成功，写入cookie和session
-//            request.getSession().setAttribute("user",githubUser);
+            Cookie cookie = new Cookie("token", token);
+            cookie.setMaxAge(60 * 60 * 24 * 30 * 6);
+            response.addCookie(cookie);
             return "redirect:/";
-        }else {
-            //登录失败，重新登录
+        } else {
+            log.error("callback get github error,{}", githubUser);
+            // 登录失败，重新登录
             return "redirect:/";
         }
     }
+
     @GetMapping("/logout")
     public String logout(HttpServletRequest request,
-                         HttpServletResponse response){
+                         HttpServletResponse response) {
         request.getSession().removeAttribute("user");
-        Cookie cookie = new Cookie("token",null);
+        Cookie cookie = new Cookie("token", null);
         cookie.setMaxAge(0);
         response.addCookie(cookie);
         return "redirect:/";
